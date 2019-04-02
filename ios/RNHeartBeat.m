@@ -1,13 +1,20 @@
+//
+//  RNHeartBeat.m
+//  RNHeartBeat
+//
+//  Created by Loi Relia on 4/02/19.
+//  Copyright © 2019 Facebook. All rights reserved.
+//
 
-#import "RNHeartBeat.h"
+#import <React/RCTBridgeModule.h>
 
-@implementation RNHeartBeat
-
-- (dispatch_queue_t)methodQueue
+@interface RCT_EXTERN_MODULE(RNHeartBeat, NSObject)
++ (BOOL)requiresMainQueueSetup
 {
-    return dispatch_get_main_queue();
+    return YES;
 }
-RCT_EXPORT_MODULE()
+
+RCT_EXTERN_METHOD(startDetection:(NSNumber *)seconds framePerSecond: (NSNumber *)framePerSecond)
+RCT_EXTERN_METHOD(stopDetection)
 
 @end
-  
