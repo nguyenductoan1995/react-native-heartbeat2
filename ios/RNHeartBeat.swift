@@ -6,25 +6,33 @@
 //  Copyright © 2019 Facebook. All rights reserved.
 //
 
-import Foundation
+import UIKit
 import AVFoundation
 
 
 let kDidUpdateHeartRate = "didUpdateHeartRate";
 let kDidStartDetection = "didStartDetection";
 let kDidStopDetection = "didStopDetection";
-let kDidFinishDetection = "kDidFinishDetection";
+let kDidFinishDetection = "didFinishDetection";
 
 
-protocol FrameExtractorDelegate: class {
-    func captured(image: UIImage)
+@objc(RNHeartBeatViewManager)
+class RNHeartBeatViewManager: RCTViewManager {
+    override func view() -> UIView! {
+        print("Create View Manager")
+        return RNHeartBeat();
+    }
+   
+    
+    
 }
 
 @objc(RNHeartBeat)
-class RNHeartBeat: RCTEventEmitter {
+class RNHeartBeat: UIView {
     private var dataPointsHue: [Double] = []
     private var isDetecting = false
     private var captureDevice: AVCaptureDevice!
+    private var previewLayer: AVCaptureVideoPreviewLayer!
     
     private var position = AVCaptureDevice.Position.back
     private let quality = AVCaptureSession.Preset.high
@@ -39,9 +47,54 @@ class RNHeartBeat: RCTEventEmitter {
     private var sampleCount = 0
     private var framePerSecond = 30
     private var seconds = 30
+   
+    private var onReady: RCTBubblingEventBlock?
+    private var onStart: RCTBubblingEventBlock?
+    private var onStop: RCTBubblingEventBlock?
+    private var onError: RCTBubblingEventBlock?
+    private var onFinish: RCTBubblingEventBlock?
+    private var onValueChanged: RCTBubblingEventBlock?
     
-    weak var delegate: FrameExtractorDelegate?
+   private func setOnReady(_ val: Any) {
+    if let onReady = self.onReady {
+        onReady(nil)
+    }
+    }
     
+    @objc var enabled: Bool {
+        set(newValue) {
+            print("Setting isScanning to:", newValue)
+            if newValue {
+                self.startDetection();
+                return
+            }
+            self.stopDetection();
+        }
+        get {
+            return self.captureSession.isRunning;
+        }
+    }
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
+        previewLayer.videoGravity = AVLayerVideoGravity.resizeAspectFill
+        previewLayer.needsDisplayOnBoundsChange = true
+    }
+    
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        previewLayer.frame = bounds;
+        previewLayer.backgroundColor = UIColor.black.withAlphaComponent(0.1).cgColor
+        layer.insertSublayer(previewLayer, at: 0)
+    
+    }
+    
+    required public init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+    }
+    
+
     private func checkPermission() {
         switch AVCaptureDevice.authorizationStatus(for: AVMediaType.video) {
         case .authorized:
@@ -61,22 +114,25 @@ class RNHeartBeat: RCTEventEmitter {
         }
     }
     
-    private func turnOnFlash() {
+
+    private func setTorch(isOn: Bool) {
         guard let captureDevice = selectCaptureDevice() else {
             print("RNHeartBeat::configureSession:: Fail to selectCaptureDevice")
             return
         }
-        
-        if captureDevice.hasFlash {
+
+        if captureDevice.hasFlash, captureDevice.isTorchAvailable {
             do {
                 try captureDevice.lockForConfiguration()
-                captureDevice.flashMode = .on
+                try captureDevice.setTorchModeOn(level: 1)
+                captureDevice.torchMode = isOn ? .on : .off
                 captureDevice.unlockForConfiguration()
+                print("RNHeartBeat::configureSession:: Torch is turned on")
             } catch {
-                print("RNHeartBeat::configureSession:: Flash could not be used")
+                print("RNHeartBeat::configureSession:: Torch could not be used")
             }
         } else {
-            print("RNHeartBeat::configureSession:: Camera didn't support flash mode")
+            print("RNHeartBeat::configureSession:: Camera didn't support torch mode")
         }
     }
     
@@ -108,6 +164,7 @@ class RNHeartBeat: RCTEventEmitter {
     
     private func configureSession() {
         guard permissionGranted else { return }
+        
         captureSession.sessionPreset = quality
         
         guard let captureDevice = selectCaptureDevice() else {
@@ -115,34 +172,33 @@ class RNHeartBeat: RCTEventEmitter {
             return
         }
         self.captureDevice = captureDevice
-        if captureDevice.hasFlash {
-            do {
-                try captureDevice.lockForConfiguration()
-                captureDevice.flashMode = .on
-                captureDevice.unlockForConfiguration()
-                print("RNHeartBeat::configureSession:: Flash turned on")
-            } catch {
-                print("RNHeartBeat::configureSession:: Flash could not be used")
-            }
-        } else {
-            print("RNHeartBeat::configureSession:: Camera didn't support flash mode")
-        }
-        
+    
         guard let captureDeviceInput = try? AVCaptureDeviceInput(device: captureDevice) else { return }
         guard captureSession.canAddInput(captureDeviceInput) else { return }
         captureSession.addInput(captureDeviceInput)
         
         let videoOutput = AVCaptureVideoDataOutput()
-        videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "sample buffer"))
+        videoOutput.setSampleBufferDelegate(self, queue: sessionQueue)
         
-        guard captureSession.canAddOutput(videoOutput) else { return }
+        guard captureSession.canAddOutput(videoOutput) else {
+            print("Fail to add output")
+            return
+            
+        }
+        
         captureSession.addOutput(videoOutput)
-        guard let connection = videoOutput.connection(with: AVFoundation.AVMediaType.video) else { return }
+        guard let connection = videoOutput.connection(with: AVFoundation.AVMediaType.video) else {
+            return
+        }
+        
         guard connection.isVideoOrientationSupported else { return }
         guard connection.isVideoMirroringSupported else { return }
         connection.videoOrientation = .portrait
         connection.isVideoMirrored = position == .front
         
+        previewLayer.connection?.videoOrientation = .portrait
+        
+//        print("configureSession",)
     }
     
     private func selectCaptureDevice() -> AVCaptureDevice? {
@@ -254,26 +310,27 @@ class RNHeartBeat: RCTEventEmitter {
         return count
     }
     
-    @objc func startDetection(_ seconds: Int = 30, framePerSecond: Int = 30) {
-        print("RNHeartBeat::startDetection:: startDetection --- isDetecting: ", isDetecting)
+    @objc func startDetection(_ seconds: NSNumber = 30, framePerSecond: NSNumber = 30) {
+        print("RNHeartBeat::startDetection:: startDetection --- isDetecting: \(isDetecting) --- seconds: \(seconds) --- framePerSecond: \(framePerSecond)")
         if isDetecting { return }
-        
         checkPermission()
+
+        isDetecting = true
+        sampleCount = 0
+        self.seconds = Int(truncating: seconds)
+        self.framePerSecond = Int(truncating: framePerSecond)
+
         sessionQueue.async { [unowned self] in
             self.configureSession()
             self.captureSession.startRunning()
-            self.isDetecting = true
-            self.sampleCount = 0
-            self.setDesiredFrame(framePerSecond)
-            self.turnOnFlash()
-            self.seconds = seconds
-            self.framePerSecond = framePerSecond
+            
         }
     }
     
     @objc func stopDetection() {
         print("RNHeartBeat::startDetection:: stopDetection")
         dataPointsHue.removeAll()
+        self.previewLayer.removeFromSuperlayer()
         sessionQueue.async { [unowned self] in
             self.configureSession()
             self.captureSession.stopRunning()
@@ -282,23 +339,20 @@ class RNHeartBeat: RCTEventEmitter {
         }
     }
     
-    override func supportedEvents() -> [String]! {
-        return [
-            kDidUpdateHeartRate,
-            kDidStartDetection,
-            kDidStopDetection,
-        ]
-    }
+//    override func supportedEvents() -> [String]! {
+//        return [
+//            kDidUpdateHeartRate,
+//            kDidStartDetection,
+//            kDidStopDetection,
+//            kDidFinishDetection
+//        ]
+//    }
 }
 
 extension RNHeartBeat: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ captureOutput: AVCaptureOutput!, didOutputSampleBuffer sampleBuffer: CMSampleBuffer!, from connection: AVCaptureConnection!) {
-        guard let uiImage = imageFromSampleBuffer(sampleBuffer: sampleBuffer) else { return }
-        DispatchQueue.main.async { [unowned self] in
-            self.delegate?.captured(image: uiImage)
-        }
     }
-    
+
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         
         guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return  }
@@ -308,6 +362,7 @@ extension RNHeartBeat: AVCaptureVideoDataOutputSampleBufferDelegate {
         // Lock the image buffer
         CVPixelBufferLockBaseAddress(cvimgRef,CVPixelBufferLockFlags(rawValue: 0));
         
+        setTorch(isOn: true)
         let inputImage = CIImage(cvPixelBuffer: imageBuffer)
         let extentVector = CIVector(x: inputImage.extent.origin.x, y: inputImage.extent.origin.y, z: inputImage.extent.size.width, w: inputImage.extent.size.height)
         
@@ -323,11 +378,13 @@ extension RNHeartBeat: AVCaptureVideoDataOutputSampleBufferDelegate {
         var hue: CGFloat = 0.0
         var sat: CGFloat = 0.0
         var bright: CGFloat = 0.0
-        print("Hue value: ", hue)
-        print("Saturation value: ", sat)
+        
         
         color.getHue(&hue, saturation: &sat, brightness: &bright, alpha: nil)
         dataPointsHue.append(Double(hue))
+        
+        print("Hue value: ", hue)
+        print("Saturation value: ", sat)
         
         var heartRateSum: Float = 0
         if dataPointsHue.count % framePerSecond == 0 {
@@ -348,7 +405,7 @@ extension RNHeartBeat: AVCaptureVideoDataOutputSampleBufferDelegate {
             let heartRate = Float(peak) / percentage
             heartRateSum += heartRate
             sampleCount += 1
-            sendEvent(withName: kDidUpdateHeartRate, body: ["heartRate": heartRate, "displaySeconds": displaySeconds])
+//            sendEvent(withName: kDidUpdateHeartRate, body: ["heartRate": heartRate, "displaySeconds": displaySeconds])
             print("captureOutput:: heartRate = \(heartRate),displaySeconds = \(displaySeconds)")
             
         }
@@ -357,7 +414,7 @@ extension RNHeartBeat: AVCaptureVideoDataOutputSampleBufferDelegate {
         if dataPointsHue.count == (seconds * framePerSecond) {
             if sampleCount > 0 && heartRateSum > 0 {
                 let heartRate = heartRateSum / Float(sampleCount)
-                sendEvent(withName: kDidFinishDetection, body: ["heartRate": heartRate, "sampleCount": sampleCount])
+//                sendEvent(withName: kDidFinishDetection, body: ["heartRate": heartRate, "sampleCount": sampleCount])
             }
             stopDetection()
         }
@@ -366,3 +423,4 @@ extension RNHeartBeat: AVCaptureVideoDataOutputSampleBufferDelegate {
         CVPixelBufferUnlockBaseAddress(cvimgRef, CVPixelBufferLockFlags(rawValue: 0))
     }
 }
+

@@ -26,11 +26,13 @@ const instructions = Platform.select({
 type Props = {};
 
 type State = {
-  heartRate: number
+  heartRate: number,
+  enabled: boolean
 };
 export default class App extends Component<Props> {
   state = {
-    heartRate: 0
+    heartRate: 0,
+    enabled: false
   };
   componentDidMount() {
     RNHeartBeat.addEventListener("didUpdateHeartRate", ({ heartRate }) => {
@@ -46,16 +48,26 @@ export default class App extends Component<Props> {
         <Text style={styles.instructions}>To get started, edit App.js</Text>
         <Text style={styles.instructions}>{instructions}</Text>
         <Text style={styles.instructions}>{this.state.heartRate}</Text>
+        <RNHeartBeat.View
+          enabled={this.state.enabled}
+          style={{
+            marginTop: 40,
+            marginHorizontal: 20,
+            width: 260,
+            height: 200
+            // backgroundColor: "gray"
+          }}
+        />
         <TouchableOpacity
           style={{ width: 120, height: 60, backgroundColor: "rgba(0,0,0,0.2)" }}
-          onPress={() => RNHeartBeat.startDetection()}
+          onPress={() => this.setState({ enabled: true })}
         >
           <Text>Start Measure</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={{ width: 120, height: 60, backgroundColor: "rgba(0,0,0,0.2)" }}
-          onPress={() => RNHeartBeat.stopDetection()}
+          onPress={() => this.setState({ enabled: false })}
         >
           <Text>Stop Measure</Text>
         </TouchableOpacity>

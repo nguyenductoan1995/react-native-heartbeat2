@@ -1,7 +1,16 @@
 // @flow
-import { NativeModules, NativeEventEmitter } from "react-native";
+import React from "react";
+import {
+  NativeModules,
+  NativeEventEmitter,
+  requireNativeComponent
+} from "react-native";
 
 const { RNHeartBeat } = NativeModules;
+const RNHeartBeatView = requireNativeComponent(
+  "RNHeartBeatViewManager",
+  RNHeartBeat
+);
 
 const RNHeartBeatEventEmitter = new NativeEventEmitter(RNHeartBeat);
 
@@ -48,9 +57,16 @@ const removeAllListeners = () => {
   RNHeartBeatEventEmitter.removeAllListeners("didUpdateHeartRate");
 };
 
+class View extends React.Component {
+  render() {
+    return <RNHeartBeatView {...this.props} />;
+  }
+}
+
 export default {
   startDetection,
   stopDetection,
   addEventListener,
-  removeAllListeners
+  removeAllListeners,
+  View
 };
