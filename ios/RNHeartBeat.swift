@@ -55,11 +55,6 @@ class RNHeartBeat: UIView {
     private var onFinish: RCTBubblingEventBlock?
     private var onValueChanged: RCTBubblingEventBlock?
     
-   private func setOnReady(_ val: Any) {
-    if let onReady = self.onReady {
-        onReady(nil)
-    }
-    }
     
     @objc var enabled: Bool {
         set(newValue) {
@@ -92,6 +87,45 @@ class RNHeartBeat: UIView {
     
     required public init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
+    }
+    
+    private func setOnReady() {
+        if let onReady = self.onReady {
+            onReady(nil)
+        }
+    }
+    
+    private func setOnStart() {
+        if let onStart = self.onStart {
+            onStart(nil)
+        }
+    }
+    
+    private func setOnStop() {
+        if let onStop = self.onStop {
+            onStop(nil)
+        }
+    }
+    
+    private func setOnError(_ error: Any) {
+        if let onError = self.onError {
+            let event = ["error": error]
+            onError(event)
+        }
+    }
+    
+    private func setOnFinish(_ heartRate: Any) {
+        if let onFinish = self.onFinish {
+            let event = ["heartRate": heartRate]
+            onFinish(event)
+        }
+    }
+    
+    private func setOnValueChanged(_ heartRate: Any, _ seconds: Any) {
+        if let onValueChanged = self.onValueChanged {
+            let event = ["heartRate": heartRate, "seconds": seconds]
+            onValueChanged(event)
+        }
     }
     
 
@@ -163,12 +197,16 @@ class RNHeartBeat: UIView {
     }
     
     private func configureSession() {
-        guard permissionGranted else { return }
+        guard permissionGranted else {
+            setOnError("Camera perssion denied")
+            return
+        }
         
         captureSession.sessionPreset = quality
         
         guard let captureDevice = selectCaptureDevice() else {
             print("RNHeartBeat::configureSession:: Fail to selectCaptureDevice")
+            setOnError("Camera device not available")
             return
         }
         self.captureDevice = captureDevice
@@ -182,12 +220,14 @@ class RNHeartBeat: UIView {
         
         guard captureSession.canAddOutput(videoOutput) else {
             print("Fail to add output")
+            setOnError("Camera output not available")
             return
             
         }
         
         captureSession.addOutput(videoOutput)
         guard let connection = videoOutput.connection(with: AVFoundation.AVMediaType.video) else {
+            setOnError("Camera connection not available")
             return
         }
         
@@ -195,10 +235,9 @@ class RNHeartBeat: UIView {
         guard connection.isVideoMirroringSupported else { return }
         connection.videoOrientation = .portrait
         connection.isVideoMirrored = position == .front
-        
         previewLayer.connection?.videoOrientation = .portrait
         
-//        print("configureSession",)
+        setOnReady()
     }
     
     private func selectCaptureDevice() -> AVCaptureDevice? {
@@ -319,7 +358,7 @@ class RNHeartBeat: UIView {
         sampleCount = 0
         self.seconds = Int(truncating: seconds)
         self.framePerSecond = Int(truncating: framePerSecond)
-
+        setOnStart()
         sessionQueue.async { [unowned self] in
             self.configureSession()
             self.captureSession.startRunning()
@@ -330,23 +369,17 @@ class RNHeartBeat: UIView {
     @objc func stopDetection() {
         print("RNHeartBeat::startDetection:: stopDetection")
         dataPointsHue.removeAll()
-        self.previewLayer.removeFromSuperlayer()
+        previewLayer.removeFromSuperlayer()
+        setOnStop()
         sessionQueue.async { [unowned self] in
             self.configureSession()
             self.captureSession.stopRunning()
             self.isDetecting = false
             self.sampleCount = 0
         }
+        
     }
-    
-//    override func supportedEvents() -> [String]! {
-//        return [
-//            kDidUpdateHeartRate,
-//            kDidStartDetection,
-//            kDidStopDetection,
-//            kDidFinishDetection
-//        ]
-//    }
+  
 }
 
 extension RNHeartBeat: AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -405,7 +438,7 @@ extension RNHeartBeat: AVCaptureVideoDataOutputSampleBufferDelegate {
             let heartRate = Float(peak) / percentage
             heartRateSum += heartRate
             sampleCount += 1
-//            sendEvent(withName: kDidUpdateHeartRate, body: ["heartRate": heartRate, "displaySeconds": displaySeconds])
+            setOnValueChanged(heartRate, displaySeconds)
             print("captureOutput:: heartRate = \(heartRate),displaySeconds = \(displaySeconds)")
             
         }
@@ -414,7 +447,7 @@ extension RNHeartBeat: AVCaptureVideoDataOutputSampleBufferDelegate {
         if dataPointsHue.count == (seconds * framePerSecond) {
             if sampleCount > 0 && heartRateSum > 0 {
                 let heartRate = heartRateSum / Float(sampleCount)
-//                sendEvent(withName: kDidFinishDetection, body: ["heartRate": heartRate, "sampleCount": sampleCount])
+                setOnFinish(heartRate)
             }
             stopDetection()
         }

@@ -1,48 +1,16 @@
 // @flow
 import React from "react";
-import {
-  NativeModules,
-  NativeEventEmitter,
-  requireNativeComponent
-} from "react-native";
-
+import { NativeModules, NativeEventEmitter, requireNativeComponent } from "react-native";
+import type { ViewStyleProp } from "react-native/Libraries/StyleSheet/StyleSheet";
 const { RNHeartBeat } = NativeModules;
-const RNHeartBeatView = requireNativeComponent(
-  "RNHeartBeatViewManager",
-  RNHeartBeat
-);
-
-const RNHeartBeatEventEmitter = new NativeEventEmitter(RNHeartBeat);
-
-export type EventTypes = "didUpdateHeartRate";
-
-const eventHandlers = {
-  didUpdateHeartRate: new Map()
-};
-
-const addEventListener = (
-  type: EventTypes,
-  handler: (heartRate: number) => void
-) => {
-  switch (type) {
-    case "didUpdateHeartRate":
-      eventHandlers[type].set(
-        handler,
-        RNHeartBeatEventEmitter.addListener(type, handler)
-      );
-      break;
-    default:
-      console.log(`Event with type ${type} does not exist.`);
-  }
-};
+const RNHeartBeatView = requireNativeComponent("RNHeartBeatViewManager", RNHeartBeat);
 
 function startDetection(seconds: number = 30, framePerSecond: number = 30) {
   if (!RNHeartBeat) {
     throw Error("RNHeartBeat not founded !");
   }
   const validSeconds = seconds < 10 ? 10 : seconds > 30 ? 30 : seconds;
-  const validFps =
-    framePerSecond < 30 ? 30 : framePerSecond > 60 ? 60 : framePerSecond;
+  const validFps = framePerSecond < 30 ? 30 : framePerSecond > 60 ? 60 : framePerSecond;
   RNHeartBeat.startDetection(validSeconds, validFps);
 }
 
@@ -53,11 +21,27 @@ function stopDetection() {
   RNHeartBeat.stopDetection();
 }
 
-const removeAllListeners = () => {
-  RNHeartBeatEventEmitter.removeAllListeners("didUpdateHeartRate");
+type ErrorCodes = {
+  CAMERA_PERMISSION_DENIED: 2000,
+  CAMERA_DEVICE_NOT_AVAILABLE: 2001,
+  CAMERA_INPUT_NOT_AVAILABLE: 2002,
+  CAMERA_OUTPUT_NOT_AVAILABLE: 2003,
+  CAMERA_CONNECTION_NOT_AVAILABLE: 2004
+};
+type Props = {
+  enabled: number,
+  style?: ViewStyleProp,
+  measureTime?: number,
+  framePerSecond?: number
+  onReady?: () => void,
+  onStart?: () => void,
+  onStop?: () => void,
+  onError?: (errorCode: ErrorCodes, errorMessage: string) => void,
+  onValueChanged?: (heartRate: number) => void
+  onFinish?: (heartRate: number) => void
 };
 
-class View extends React.Component {
+class View extends React.Component<Props> {
   render() {
     return <RNHeartBeatView {...this.props} />;
   }
