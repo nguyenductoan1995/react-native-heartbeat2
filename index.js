@@ -3,7 +3,8 @@ import React from "react";
 import {
   NativeModules,
   NativeEventEmitter,
-  requireNativeComponent
+  requireNativeComponent,
+  PermissionsAndroid
 } from "react-native";
 import type { ViewStyleProp } from "react-native/Libraries/StyleSheet/StyleSheet";
 const { RNHeartBeat } = NativeModules;
@@ -14,7 +15,9 @@ type ErrorCodes = {
   CAMERA_DEVICE_NOT_AVAILABLE: 2001,
   CAMERA_INPUT_NOT_AVAILABLE: 2002,
   CAMERA_OUTPUT_NOT_AVAILABLE: 2003,
-  CAMERA_CONNECTION_NOT_AVAILABLE: 2004
+  CAMERA_CONNECTION_NOT_AVAILABLE: 2004,
+  ERROR_WHILE_CALCULATION: 2005,
+  SKIN_DETECTION_FAILURE: 2006
 };
 
 type Props = {

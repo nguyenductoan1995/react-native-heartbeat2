@@ -1,34 +1,86 @@
 package com.reactlibrary;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.pm.PackageManager;
+import android.hardware.Camera;
+import android.hardware.Camera.PreviewCallback;
 import android.graphics.Color;
 import android.graphics.Rect;
+import android.os.Build;
 import android.support.annotation.ColorInt;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.support.annotation.Nullable;
 import android.widget.FrameLayout;
 
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.events.RCTEventEmitter;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+import static android.Manifest.permission.CAMERA;
 
 public class RNHeartBeatView extends FrameLayout implements SurfaceHolder.Callback  {
+    private final static String TAG = "RNHeartBeatView";
+
     private SurfaceView surface;
 
-    private boolean showFrame;
-    private Rect frameRect;
-//    private BarcodeFrame barcodeFrame;
-    @ColorInt
-    private int frameColor = Color.GREEN;
-    @ColorInt private int laserColor = Color.RED;
+
+    private int measureTime = 10;
+    private int framePerSecond = 30;
+    private boolean enabled = false;
+    private boolean previewing = false;
+    private Camera mCamera;
+
+    private final static int CAMERA_PERMISSION_DENIED = 2000;
+    private final static int CAMERA_DEVICE_NOT_AVAILABLE = 2001;
+    private final static int CAMERA_INPUT_NOT_AVAILABLE = 2002;
+    private final static int CAMERA_OUTPUT_NOT_AVAILABLE = 2003;
+    private final static int CAMERA_CONNECTION_NOT_AVAILABLE = 2004;
+    private final static int ERROR_WHILE_CALCULATION = 2005;
+    private final static int SKIN_DETECTION_FAILURE = 2006;
+
+
+    public static enum Events {
+        EVENT_CAMERA_READY("onReady"),
+        EVENT_ON_STARRT("onStart"),
+        EVENT_ON_STOP("onStop"),
+        EVENT_ON_ERROR_OCCURED("onErrorOccured"),
+        EVENT_ON_VALUE_CHANGED("onValueChanged"),
+        EVENT_ON_FINISH("onFinish");
+
+        private final String mName;
+
+        Events(final String name) {
+            mName = name;
+        }
+
+        @Override
+        public String toString() {
+            return mName;
+        }
+    }
+
+
 
     public RNHeartBeatView(ThemedReactContext context) {
         super(context);
         surface = new SurfaceView(context);
         setBackgroundColor(Color.BLACK);
-//        addView(surface, MATCH_PARENT, MATCH_PARENT);
+        addView(surface, MATCH_PARENT, MATCH_PARENT);
         surface.getHolder().addCallback(this);
     }
 
@@ -38,24 +90,41 @@ public class RNHeartBeatView extends FrameLayout implements SurfaceHolder.Callba
 //        int actualPreviewHeight = getResources().getDisplayMetrics().heightPixels;
 //        int height = Utils.convertDeviceHeightToSupportedAspectRatio(actualPreviewWidth, actualPreviewHeight);
 //        surface.layout(0, 0, actualPreviewWidth, height);
-//        if (barcodeFrame != null) {
-//            ((View) barcodeFrame).layout(0, 0, actualPreviewWidth, height);
-//        }
     }
+
+    public void setEnabled(boolean enabled) {
+        if(this.enabled != enabled) {
+            if(enabled) {
+//                this.startCamera();
+            } else {
+//                this.stopCamera();
+            }
+            this.enabled = enabled;
+        }
+    }
+
+    public void setMeasureTime(int measureTime) {
+        this.measureTime = measureTime;
+    }
+
+    public void setFramePerSecond(int framePerSecond) {
+        this.framePerSecond = framePerSecond;
+    }
+
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-//        RNHeartBeatViewManager.setCameraView(this);
+        RNHeartBeatViewManager.setCameraView(this);
     }
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-//        RNHeartBeatViewManager.setCameraView(this);
+        RNHeartBeatViewManager.setCameraView(this);
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
-//        RNHeartBeatViewManager.removeCameraView();
+        RNHeartBeatViewManager.removeCameraView();
     }
 
 
@@ -63,81 +132,44 @@ public class RNHeartBeatView extends FrameLayout implements SurfaceHolder.Callba
         return surface.getHolder();
     }
 
-    private final Runnable measureAndLayout = new Runnable() {
-        @Override
-        public void run() {
-            measure(
-                    MeasureSpec.makeMeasureSpec(getWidth(), MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(getHeight(), MeasureSpec.EXACTLY));
-            layout(getLeft(), getTop(), getRight(), getBottom());
-        }
-    };
 
-    @Override
-    public void requestLayout() {
-        super.requestLayout();
-        post(measureAndLayout);
-    }
 
-    public void setShowFrame(boolean showFrame) {
-        this.showFrame = showFrame;
-    }
 
-    public void showFrame() {
-//        if (showFrame) {
-//            barcodeFrame = new BarcodeFrame(getContext());
-//            barcodeFrame.setFrameColor(frameColor);
-//            barcodeFrame.setLaserColor(laserColor);
-//            addView(barcodeFrame);
-//            requestLayout();
-//        }
-    }
-
-    public Rect getFramingRectInPreview(int previewWidth, int previewHeight) {
-        if (frameRect == null) {
-//            if (barcodeFrame != null) {
-//                Rect framingRect = new Rect(barcodeFrame.getFrameRect());
-//                int frameWidth = barcodeFrame.getWidth();
-//                int frameHeight = barcodeFrame.getHeight();
+//    private void startCamera() {
+//        if(!previewing){
+//            mCamera = Camera.open(Camera.CameraInfo.CAMERA_FACING_BACK);
+//            final ReactContext context = (ReactContext) getContext();
 //
-//                if (previewWidth < frameWidth) {
-//                    framingRect.left = framingRect.left * previewWidth / frameWidth;
-//                    framingRect.right = framingRect.right * previewWidth / frameWidth;
+//            if (mCamera != null){
+//                try {
+//                    mCamera.setPreviewCallback(previewCallback);
+//                    mCamera.setPreviewDisplay(surface.getHolder());
+//                    mCamera.startPreview();
+//                    previewing = true;
+//                    context.getJSModule(RCTEventEmitter.class).receiveEvent(getId(), Events.EVENT_ON_STARRT.toString(), null);
+//                } catch (IOException e) {
+//                    // TODO Auto-generated catch block
+//                    e.printStackTrace();
 //                }
-//                if (previewHeight < frameHeight) {
-//                    framingRect.top = framingRect.top * previewHeight / frameHeight;
-//                    framingRect.bottom = framingRect.bottom * previewHeight / frameHeight;
-//                }
-//
-//                frameRect = framingRect;
 //            } else {
-//                frameRect = new Rect(0, 0, previewWidth, previewHeight);
+//                WritableMap map = Arguments.createMap();
+//                map.putInt("errorCode",CAMERA_CONNECTION_NOT_AVAILABLE);
+//                map.putString("errorMessage","Camera connection not available");
+//                context.getJSModule(RCTEventEmitter.class).receiveEvent(getId(), Events.EVENT_ON_STARRT.toString(), map);
 //            }
-        }
-        return frameRect;
-    }
-
-    public void setFrameColor(@ColorInt int color) {
-        this.frameColor = color;
-//        if (barcodeFrame != null) {
-//            barcodeFrame.setFrameColor(color);
 //        }
-    }
-
-    public void setLaserColor(@ColorInt int color) {
-        this.laserColor = color;
-//        if (barcodeFrame != null) {
-//            barcodeFrame.setLaserColor(laserColor);
+//    }
+//
+//    private void stopCamera() {
+//        if(mCamera != null && previewing){
+//            surface.getHolder().removeCallback(this);
+//            mCamera.stopPreview();
+//            mCamera.release();
+//            mCamera = null;
+//            previewing = false;
+//            Log.d(TAG,"Camera stopped");
 //        }
-    }
-
-    /**
-     * Set background color for Surface view on the period, while camera is not loaded yet.
-     * Provides opportunity for user to hide period while camera is loading
-     * @param color - color of the surfaceview
-     */
-    public void setSurfaceBgColor(@ColorInt int color) {
-        surface.setBackgroundColor(color);
-    }
+//    }
+//
 
 }
