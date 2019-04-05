@@ -7,13 +7,21 @@
  */
 
 import React, { Component } from "react";
-import { Platform, StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity
+} from "react-native";
 
 import RNHeartBeat from "react-native-heart-beat";
 
 const instructions = Platform.select({
   ios: "Press Cmd+R to reload,\n" + "Cmd+D or shake for dev menu",
-  android: "Double tap R on your keyboard to reload,\n" + "Shake or press menu button for dev menu"
+  android:
+    "Double tap R on your keyboard to reload,\n" +
+    "Shake or press menu button for dev menu"
 });
 
 type Props = {};
@@ -27,12 +35,6 @@ export default class App extends Component<Props> {
     heartRate: 0,
     enabled: false
   };
-  componentDidMount() {
-    RNHeartBeat.addEventListener("didUpdateHeartRate", ({ heartRate }) => {
-      console.log("didUpdateHeartRate: ", heartRate);
-      this.setState({ heartRate });
-    });
-  }
 
   render() {
     return (
@@ -41,13 +43,34 @@ export default class App extends Component<Props> {
         <Text style={styles.instructions}>To get started, edit App.js</Text>
         <Text style={styles.instructions}>{instructions}</Text>
         <Text style={styles.instructions}>{this.state.heartRate}</Text>
-        <RNHeartBeat.View
+        <RNHeartBeat
           enabled={this.state.enabled}
+          measureTime={5}
+          framePerSecond={30}
+          onErrorOccured={(errorCode, errorMessage) => {
+            console.log("onError: ", errorCode, errorMessage);
+          }}
+          onReady={() => {
+            console.log("onReady");
+          }}
+          onFinish={heartRate => {
+            console.log("onFinish: ", heartRate);
+          }}
+          onStart={() => {
+            console.log("onStart: ");
+          }}
+          onStop={() => {
+            console.log("onStop: ");
+          }}
+          onValueChanged={(heartRate, displaySecond) => {
+            console.log("onValueChanged: ", heartRate, displaySecond);
+          }}
           style={{
             marginTop: 40,
             marginHorizontal: 20,
             width: 260,
             height: 200
+
             // backgroundColor: "gray"
           }}
         />

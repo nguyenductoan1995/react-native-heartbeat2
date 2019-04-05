@@ -9,24 +9,16 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTViewManager.h>
 
-@interface RCT_EXTERN_MODULE(RNHeartBeat, UIView)
-+ (BOOL)requiresMainQueueSetup
-{
-    return FALSE;
-}
-
-RCT_EXTERN_METHOD(startDetection:(nonnull NSNumber *)seconds framePerSecond: (nonnull NSNumber *)framePerSecond)
-RCT_EXTERN_METHOD(stopDetection)
-
-@end
-
 @interface RCT_EXTERN_MODULE(RNHeartBeatViewManager, RCTViewManager)
 RCT_EXPORT_VIEW_PROPERTY(enabled, BOOL)
-RCT_EXPORT_VIEW_PROPERTY(onReady, RCTDirectEventBlock)
-RCT_EXPORT_VIEW_PROPERTY(onError, RCTDirectEventBlock)
-RCT_EXPORT_VIEW_PROPERTY(onStart, RCTDirectEventBlock)
-RCT_EXPORT_VIEW_PROPERTY(onStop, RCTDirectEventBlock)
-RCT_EXPORT_VIEW_PROPERTY(onValueChanged, RCTDirectEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(measureTime, NSNumber)
+RCT_EXPORT_VIEW_PROPERTY(framePerSecond, NSNumber)
+RCT_EXPORT_VIEW_PROPERTY(onReady, RCTBubblingEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onErrorOccured, RCTBubblingEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onStart, RCTBubblingEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onStop, RCTBubblingEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onFinish, RCTBubblingEventBlock)
+RCT_EXPORT_VIEW_PROPERTY(onValueChanged, RCTBubblingEventBlock)
 
 + (BOOL)requiresMainQueueSetup
 {
