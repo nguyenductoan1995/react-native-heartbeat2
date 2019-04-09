@@ -10,21 +10,29 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.os.Build;
 import android.support.annotation.ColorInt;
+import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.support.annotation.Nullable;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.events.RCTEventEmitter;
+import com.reactlibrary.Camera.CameraManager;
+import com.reactlibrary.Camera.CameraPreview;
+import com.reactlibrary.Camera.CameraPreviewCallback;
+import com.reactlibrary.Camera.EventEmiter;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -33,71 +41,38 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.Manifest.permission.CAMERA;
 
-public class RNHeartBeatView extends FrameLayout implements SurfaceHolder.Callback  {
+    public class RNHeartBeatView extends ViewGroup implements ActivityCompat.OnRequestPermissionsResultCallback, CameraPreviewCallback {
     private final static String TAG = "RNHeartBeatView";
+    private final static int REQUEST_CODE = 100;
 
-    private SurfaceView surface;
+    private final static String PERMISSION_REQUIRED = "Camera Permission";
+    private final static String PERMISSION_MESSAGE = "Please allow to access your camera";
+    private final static String[] neededPermissions = new String[]{CAMERA};
 
+    private static ThemedReactContext reactContext;
 
     private int measureTime = 10;
     private int framePerSecond = 30;
     private boolean enabled = false;
-    private boolean previewing = false;
-    private Camera mCamera;
-
-    private final static int CAMERA_PERMISSION_DENIED = 2000;
-    private final static int CAMERA_DEVICE_NOT_AVAILABLE = 2001;
-    private final static int CAMERA_INPUT_NOT_AVAILABLE = 2002;
-    private final static int CAMERA_OUTPUT_NOT_AVAILABLE = 2003;
-    private final static int CAMERA_CONNECTION_NOT_AVAILABLE = 2004;
-    private final static int ERROR_WHILE_CALCULATION = 2005;
-    private final static int SKIN_DETECTION_FAILURE = 2006;
-
-
-    public static enum Events {
-        EVENT_CAMERA_READY("onReady"),
-        EVENT_ON_STARRT("onStart"),
-        EVENT_ON_STOP("onStop"),
-        EVENT_ON_ERROR_OCCURED("onErrorOccured"),
-        EVENT_ON_VALUE_CHANGED("onValueChanged"),
-        EVENT_ON_FINISH("onFinish");
-
-        private final String mName;
-
-        Events(final String name) {
-            mName = name;
-        }
-
-        @Override
-        public String toString() {
-            return mName;
-        }
-    }
-
 
 
     public RNHeartBeatView(ThemedReactContext context) {
         super(context);
-        surface = new SurfaceView(context);
-        setBackgroundColor(Color.BLACK);
-        addView(surface, MATCH_PARENT, MATCH_PARENT);
-        surface.getHolder().addCallback(this);
+        reactContext = context;
     }
 
-    @Override
-    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-//        int actualPreviewWidth = getResources().getDisplayMetrics().widthPixels;
-//        int actualPreviewHeight = getResources().getDisplayMetrics().heightPixels;
-//        int height = Utils.convertDeviceHeightToSupportedAspectRatio(actualPreviewWidth, actualPreviewHeight);
-//        surface.layout(0, 0, actualPreviewWidth, height);
-    }
 
     public void setEnabled(boolean enabled) {
-        if(this.enabled != enabled) {
-            if(enabled) {
-//                this.startCamera();
+        boolean granted = this.checkPermission();
+        if(!granted) {
+            EventEmiter.emitOnErrorOccured(reactContext, EventEmiter.Errors.CAMERA_PERMISSION_DENIED);
+            return;
+        }
+        if (this.enabled != enabled) {
+            if (enabled) {
+                this.startCamera();
             } else {
-//                this.stopCamera();
+                this.stopCamera();
             }
             this.enabled = enabled;
         }
@@ -112,64 +87,163 @@ public class RNHeartBeatView extends FrameLayout implements SurfaceHolder.Callba
     }
 
 
-    @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        RNHeartBeatViewManager.setCameraView(this);
+    private CameraPreview mPreview;
+    private int mInitType = CameraManager.TYPE_CAMERA_BACK;
+
+
+    public void startCamera() {
+        if (null == this.mPreview) {
+            mPreview = new CameraPreview(getContext(), mInitType,this);
+            mPreview.setMeasureTime(measureTime);
+            addView(mPreview);
+            requestLayout();
+        } else {
+            mPreview.startPreview();
+        }
+    }
+
+    public void stopCamera() {
+        if (null != this.mPreview) {
+            mPreview.stopCamera();
+        }
     }
 
     @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        RNHeartBeatViewManager.setCameraView(this);
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        startCamera();
+        layoutViewFinder(l, t, r, b);
+    }
+
+    private void layoutViewFinder(int left, int top, int right, int bottom) {
+        if (null == mPreview) {
+            return;
+        }
+        float width = right - left;
+        float height = bottom - top;
+        int viewfinderWidth;
+        int viewfinderHeight;
+        double ratio;
+        ratio = this.mPreview.getRatio();
+
+        if (ratio == 0) {
+            this.mPreview.layout(0, 0, (int) width, (int) height);
+            return;
+        }
+
+        if (ratio * height < width) {
+            viewfinderHeight = (int) (width / ratio);
+            viewfinderWidth = (int) width;
+        } else {
+            viewfinderWidth = (int) (ratio * height);
+            viewfinderHeight = (int) height;
+        }
+
+        int viewFinderPaddingX = (int) ((width - viewfinderWidth) / 2);
+        int viewFinderPaddingY = (int) ((height - viewfinderHeight) / 2);
+
+        this.mPreview.layout(viewFinderPaddingX, viewFinderPaddingY, viewFinderPaddingX + viewfinderWidth, viewFinderPaddingY + viewfinderHeight);
+        this.postInvalidate(this.getLeft(), this.getTop(), this.getRight(), this.getBottom());
+    }
+
+    private void autoFocus() {
+        mPreview.autoFocus();
     }
 
     @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        RNHeartBeatViewManager.removeCameraView();
+    public boolean onTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_UP) {
+            autoFocus();
+        }
+        return true;
     }
 
-
-    public SurfaceHolder getHolder() {
-        return surface.getHolder();
+    private boolean checkPermission() {
+        int currentAPIVersion = Build.VERSION.SDK_INT;
+        if (currentAPIVersion >= android.os.Build.VERSION_CODES.M) {
+            ArrayList<String> permissionsNotGranted = new ArrayList<>();
+            for (String permission : neededPermissions) {
+                if (ContextCompat.checkSelfPermission(reactContext, permission) != PackageManager.PERMISSION_GRANTED) {
+                    permissionsNotGranted.add(permission);
+                }
+            }
+            if (permissionsNotGranted.size() > 0) {
+                boolean shouldShowAlert = false;
+                for (String permission : permissionsNotGranted) {
+                    shouldShowAlert = ActivityCompat.shouldShowRequestPermissionRationale(reactContext.getCurrentActivity(), permission);
+                }
+                if (shouldShowAlert) {
+                    showPermissionAlert(permissionsNotGranted.toArray(new String[permissionsNotGranted.size()]));
+                } else {
+                    requestPermissions(permissionsNotGranted.toArray(new String[permissionsNotGranted.size()]));
+                }
+                return false;
+            }
+        }
+        return true;
     }
 
+    private void showPermissionAlert(final String[] permissions) {
+        AlertDialog.Builder alertBuilder = new AlertDialog.Builder(reactContext);
+        alertBuilder.setCancelable(true);
+        alertBuilder.setTitle(PERMISSION_REQUIRED);
+        alertBuilder.setMessage(PERMISSION_MESSAGE);
+        alertBuilder.setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                requestPermissions(permissions);
+            }
+        });
+        AlertDialog alert = alertBuilder.create();
+        alert.show();
+    }
 
+    private void requestPermissions(String[] permissions) {
+        ActivityCompat.requestPermissions(reactContext.getCurrentActivity(), permissions, REQUEST_CODE);
+    }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_CODE:
+                for (int result : grantResults) {
+                    if (result == PackageManager.PERMISSION_DENIED) {
+                        // Not all permissions granted. Show message to the user.
+                        return;
+                    }
+                }
 
-//    private void startCamera() {
-//        if(!previewing){
-//            mCamera = Camera.open(Camera.CameraInfo.CAMERA_FACING_BACK);
-//            final ReactContext context = (ReactContext) getContext();
-//
-//            if (mCamera != null){
-//                try {
-//                    mCamera.setPreviewCallback(previewCallback);
-//                    mCamera.setPreviewDisplay(surface.getHolder());
-//                    mCamera.startPreview();
-//                    previewing = true;
-//                    context.getJSModule(RCTEventEmitter.class).receiveEvent(getId(), Events.EVENT_ON_STARRT.toString(), null);
-//                } catch (IOException e) {
-//                    // TODO Auto-generated catch block
-//                    e.printStackTrace();
-//                }
-//            } else {
-//                WritableMap map = Arguments.createMap();
-//                map.putInt("errorCode",CAMERA_CONNECTION_NOT_AVAILABLE);
-//                map.putString("errorMessage","Camera connection not available");
-//                context.getJSModule(RCTEventEmitter.class).receiveEvent(getId(), Events.EVENT_ON_STARRT.toString(), map);
-//            }
-//        }
-//    }
-//
-//    private void stopCamera() {
-//        if(mCamera != null && previewing){
-//            surface.getHolder().removeCallback(this);
-//            mCamera.stopPreview();
-//            mCamera.release();
-//            mCamera = null;
-//            previewing = false;
-//            Log.d(TAG,"Camera stopped");
-//        }
-//    }
-//
+                // All permissions are granted. So, do the appropriate work now.
+                break;
+        }
 
+    }
+
+    @Override
+    public void onStart() {
+        EventEmiter.emitOnStart(reactContext);
+    }
+
+    @Override
+    public void onStop() {
+        EventEmiter.emitOnStop(reactContext);
+    }
+
+    @Override
+    public void onReady() {
+        EventEmiter.emitOnReady(reactContext);
+    }
+
+    @Override
+    public void onErrorOrcured(EventEmiter.Errors error) {
+        EventEmiter.emitOnErrorOccured(reactContext,error);
+    }
+
+    @Override
+    public void onFinish(float heartRate) {
+        EventEmiter.emitOnFinish(reactContext,heartRate);
+    }
+
+    @Override
+    public void onValueChanged(float heartRate, float displaySeconds) {
+        EventEmiter.emitOnValueChanged(reactContext,heartRate,displaySeconds);
+    }
 }

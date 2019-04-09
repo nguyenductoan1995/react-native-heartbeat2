@@ -39,9 +39,6 @@ export default class App extends Component<Props> {
   render() {
     return (
       <View style={styles.container}>
-        <Text style={styles.welcome}>Welcome to React Native!</Text>
-        <Text style={styles.instructions}>To get started, edit App.js</Text>
-        <Text style={styles.instructions}>{instructions}</Text>
         <Text style={styles.instructions}>{this.state.heartRate}</Text>
         <RNHeartBeat
           enabled={this.state.enabled}
@@ -69,13 +66,18 @@ export default class App extends Component<Props> {
             marginTop: 40,
             marginHorizontal: 20,
             width: 260,
-            height: 200
+            height: 200,
 
-            // backgroundColor: "gray"
+            backgroundColor: "gray"
           }}
         />
         <TouchableOpacity
-          style={{ width: 120, height: 60, backgroundColor: "rgba(0,0,0,0.2)" }}
+          style={{
+            marginTop: 40,
+            width: 120,
+            height: 60,
+            backgroundColor: "rgba(0,0,0,0.2)"
+          }}
           onPress={() => this.setState({ enabled: true })}
         >
           <Text>Start Measure</Text>

@@ -4,7 +4,9 @@ import {
   NativeModules,
   NativeEventEmitter,
   requireNativeComponent,
-  PermissionsAndroid
+  DeviceEventEmitter,
+  EmitterSubscription,
+  Platform
 } from "react-native";
 import type { ViewStyleProp } from "react-native/Libraries/StyleSheet/StyleSheet";
 const { RNHeartBeat } = NativeModules;
@@ -15,9 +17,7 @@ type ErrorCodes = {
   CAMERA_DEVICE_NOT_AVAILABLE: 2001,
   CAMERA_INPUT_NOT_AVAILABLE: 2002,
   CAMERA_OUTPUT_NOT_AVAILABLE: 2003,
-  CAMERA_CONNECTION_NOT_AVAILABLE: 2004,
-  ERROR_WHILE_CALCULATION: 2005,
-  SKIN_DETECTION_FAILURE: 2006
+  CAMERA_CONNECTION_NOT_AVAILABLE: 2004
 };
 
 type Props = {
@@ -33,7 +33,48 @@ type Props = {
   onFinish?: (heartRate: number) => void
 };
 
+const isAndroid = Platform.OS === "android";
+
 export default class View extends React.Component<Props> {
+  _subscriptions: EmitterSubscription[] = [];
+
+  componentWillMount() {
+    if (isAndroid) {
+      const onReady = DeviceEventEmitter.addListener("onReady", this._onReady);
+      const onStart = DeviceEventEmitter.addListener("onStart", this._onStart);
+      const onStop = DeviceEventEmitter.addListener("onStop", this._onStop);
+      const onValueChanged = DeviceEventEmitter.addListener(
+        "onValueChanged",
+        this._onValueChanged
+      );
+      const onFinish = DeviceEventEmitter.addListener(
+        "onFinish",
+        this._onFinish
+      );
+      const onErrorOccured = DeviceEventEmitter.addListener(
+        "onErrorOccured",
+        this._onErrorOccured
+      );
+
+      this._subscriptions.push(onReady);
+      this._subscriptions.push(onStart);
+      this._subscriptions.push(onReady);
+      this._subscriptions.push(onStop);
+      this._subscriptions.push(onValueChanged);
+      this._subscriptions.push(onErrorOccured);
+    }
+  }
+
+  componentWillUnmount() {
+    if (isAndroid) {
+      this._subscriptions.forEach(subscription => {
+        if (subscription) {
+          subscription.remove();
+        }
+      });
+    }
+  }
+
   _onReady = () => {
     const { onReady } = this.props;
     if (onReady) {
@@ -57,24 +98,26 @@ export default class View extends React.Component<Props> {
 
   _onErrorOccured = event => {
     const { onErrorOccured } = this.props;
-    if (onErrorOccured) {
-      const { errorMessage, errorCode } = event.nativeEvent;
+    if (onErrorOccured && event) {
+      const { errorMessage, errorCode } = isAndroid ? event : event.nativeEvent;
       onErrorOccured(errorCode, errorMessage);
     }
   };
 
   _onValueChanged = event => {
     const { onValueChanged } = this.props;
-    if (onValueChanged) {
-      const { heartRate, displaySeconds } = event.nativeEvent;
+    if (onValueChanged && event) {
+      const { heartRate, displaySeconds } = isAndroid
+        ? event
+        : event.nativeEvent;
       onValueChanged(heartRate, displaySeconds);
     }
   };
 
   _onFinish = event => {
     const { onFinish } = this.props;
-    if (onFinish) {
-      const { heartRate } = event.nativeEvent;
+    if (onFinish && event) {
+      const { heartRate } = isAndroid ? event : event.nativeEvent;
       onFinish(heartRate);
     }
   };

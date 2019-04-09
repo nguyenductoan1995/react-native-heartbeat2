@@ -13,6 +13,7 @@ public class RNHeartBeatModule extends ReactContextBaseJavaModule {
   public RNHeartBeatModule(ReactApplicationContext reactContext) {
     super(reactContext);
     this.reactContext = reactContext;
+
   }
 
   @Override

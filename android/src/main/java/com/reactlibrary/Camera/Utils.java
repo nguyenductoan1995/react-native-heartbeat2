@@ -1,4 +1,4 @@
-package com.reactlibrary;
+package com.reactlibrary.Camera;
 
 public class Utils {
     private static final float MAX_SCREEN_RATIO = 16 / 9f;
