@@ -213,7 +213,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
             int height = size.height;
 
             int imgAvg = Utils.decodeYUV420SPtoRedAvg(data.clone(), height, width);
-            if (imgAvg == 0 || imgAvg == 255) {
+                if (imgAvg == 0 || imgAvg < 199) {
                 cameraPreviewCallback.onErrorOrcured(EventEmiter.Errors.SKIN_DETECTION_FAILURE);
                 processing.set(false);
                 return;
